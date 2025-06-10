@@ -120,5 +120,6 @@ def process_images(input_dir: str, output_dir: str, similarity_threshold=SIMILAR
             except Exception as copy_e:
                 print(f"Could not even copy errored file {filename}: {copy_e}")
             processing_stats["errors"] += 1
+
     
     return processing_stats
