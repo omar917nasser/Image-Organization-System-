@@ -8,11 +8,11 @@ from aiModels import DEVICE
 from config import CONNECTION_URI, DATABASE_NAME
 
 class MongoDBManager:
-    def __init__(self):
+    def __init__(self, connection_uri=CONNECTION_URI, database_name=DATABASE_NAME):
         """Initialize MongoDB connection with connection pooling."""
         try:
-            self.client = MongoClient(CONNECTION_URI, maxPoolSize=50, minPoolSize=10)
-            self.db = self.client[DATABASE_NAME]
+            self.client = MongoClient(connection_uri, maxPoolSize=50, minPoolSize=10)
+            self.db = self.client[database_name]
             self.faces_collection = self.db.imageData
             
             # Test connection
@@ -23,7 +23,9 @@ class MongoDBManager:
             print(f"Error connecting to MongoDB: {e}")
             raise
     
-    def save_new_person(self, embedding, name_label=None):
+# In databaseManager.py
+
+    def save_new_person(self, embedding, name_label=None, image_path=None):
         """Save a new person to the database."""
         person_id = self.generatePersonID()
 
@@ -34,11 +36,11 @@ class MongoDBManager:
                 "name_label": name_label,
                 "embeddings": [embedding_list],
                 "representative_embedding": embedding_list,  
-                "representative_image_paths": []
+                "representative_image_paths": [image_path] if image_path else [] # This line is critical
             }
             result = self.faces_collection.insert_one(person_doc)
-            print(f"Successfully saved new person with ID: {result.inserted_id}")
-            return result.inserted_id
+            print(f"Successfully saved new person with ID: {person_id}")
+            return person_id
         except Exception as e:
             print(f"Error saving new person: {e}")
             raise
@@ -124,7 +126,7 @@ class MongoDBManager:
             self.faces_collection.delete_many({"person_id": {"$in": source_ids}})
             # Recompute new representative embedding
             self._recompute_representative_embedding(target_id)
-            print(f"Successfully merged {len(source_ids)} into {target_id}")
+            print(f"Successfully merged {len(source_ids)} into {target_id} in Database.")
             return True
         except Exception as e:
             print(f"Error merging persons: {e}")
