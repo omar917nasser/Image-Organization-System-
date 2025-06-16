@@ -50,8 +50,8 @@ The system is built with a modular architecture, separating concerns into distin
 
 1.  **Clone the repository:**
     ```bash
-    git clone https://github.com/your-username/your-repository-name.git
-    cd your-repository-name
+    git clone https://github.com/omar917nasser/Image-Organization-System-.git
+    cd Image-Organization-System-
     ```
 
 2.  **Install the required Python packages:**
