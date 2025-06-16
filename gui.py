@@ -1,3 +1,4 @@
+# Main GUI application for face recognition and image organization using Streamlit
 import streamlit as st
 import os
 from PIL import Image
@@ -7,7 +8,7 @@ from fileOrganizer import process_images
 from config import CONNECTION_URI, DATABASE_NAME
 import time
 
-# --- App Configuration ---
+# Configure Streamlit page settings
 st.set_page_config(
     page_title="Face Recognition & Image Organizer",
     page_icon="🤖",
@@ -15,16 +16,14 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# --- Global State for Output Directory ---
-# THIS IS THE CRUCIAL PART: Initialize session_state variables at the top-level
-# of the script, immediately after st.set_page_config().
+# Initialize session state for output directory persistence
 if 'output_directory' not in st.session_state:
-    st.session_state.output_directory = "" # Initialize with an empty string
+    st.session_state.output_directory = ""
 
-# --- Database Connection ---
+# Cache database connection for better performance
 @st.cache_resource
 def get_db_manager():
-    """Caches the database manager for performance."""
+    """Initialize and cache MongoDB connection."""
     try:
         return MongoDBManager(connection_uri=CONNECTION_URI, database_name=DATABASE_NAME)
     except Exception as e:
@@ -33,17 +32,17 @@ def get_db_manager():
 
 db_manager = get_db_manager()
 
-# --- Helper Functions ---
+# Utility functions for data refresh and UI updates
 def refresh_data():
-    """Clears caches to reload data."""
+    """Clear cache to force data reload."""
     st.cache_data.clear()
 
 def force_rerun():
-    """Forces a rerun of the page to refresh the data."""
+    """Trigger page rerun to refresh UI."""
     st.rerun()
 
 def display_image_preview(person_id, all_persons_data):
-    """Helper function to display a person's image preview."""
+    """Display preview image for a person with error handling."""
     person_data = all_persons_data.get(person_id)
     if person_data:
         image_paths = person_data.get("representative_image_paths", [])
@@ -60,8 +59,7 @@ def display_image_preview(person_id, all_persons_data):
         else:
             st.info(f"No representative image for {person_data.get('name_label', person_id)}.")
 
-
-# --- Sidebar Navigation ---
+# Navigation sidebar setup
 st.sidebar.title("Navigation")
 page = st.sidebar.radio(
     "Go to",
@@ -72,6 +70,7 @@ page = st.sidebar.radio(
 # --- Main App ---
 if db_manager:
     if page == "Dashboard":
+        # Dashboard page showing key metrics and person overview
         st.title("📊 Dashboard")
         st.markdown("---")
         
@@ -114,6 +113,7 @@ if db_manager:
             st.error(f"Error loading person data: {e}")
 
     elif page == "Image Processing":
+        # Image processing page for organizing images by faces
         st.title("🖼️ Image Processing")
         st.markdown("---")
         
@@ -122,39 +122,37 @@ if db_manager:
         # --- Directory Selection ---
         input_dir = st.text_input("Enter the Input Directory Path", placeholder="e.g., C:/Users/YourName/RawImages")
         
-        # This input updates the session state. Its value is pre-filled from session_state.
         current_output_dir_input = st.text_input(
             "Enter the Output Directory Path:",
-            value=st.session_state.output_directory, # Pre-fill from session_state
+            value=st.session_state.output_directory,
             placeholder="e.g., C:/Users/YourName/OrganizedFaces"
         )
-        # Update session_state immediately when this input changes
         st.session_state.output_directory = current_output_dir_input
 
+        # Image processing execution
         if st.button("Start Processing", key="start_processing"):
             if not input_dir:
                 st.error("Please enter an input folder path.")
-            elif not st.session_state.output_directory: # Check from session_state
+            elif not st.session_state.output_directory:
                 st.error("Please enter an output folder path.")
             elif not os.path.exists(input_dir):
                 st.error(f"Input folder '{input_dir}' does not exist.")
             else:
-                # Ensure output directory exists before processing
                 if not os.path.isdir(st.session_state.output_directory):
                     st.warning("Output directory not found. Creating it.")
                     os.makedirs(st.session_state.output_directory, exist_ok=True)
 
                 with st.spinner("Processing images... This may take a while."):
                     try:
-                        # Use the output_directory from session_state
                         stats = process_images(input_dir, st.session_state.output_directory)
                         st.success("Image processing complete!")
                         st.json(stats)
                     except Exception as e:
                         st.error(f"An error occurred during processing: {e}")
-                refresh_data() # Refresh data after processing
+                refresh_data()
 
     elif page == "Person Management":
+        # Person management page for renaming and merging identities
         st.title("👥 Person Management")
         st.markdown("---")
         
@@ -206,7 +204,6 @@ if db_manager:
                     # --- Merge Persons ---
                     st.header("Merge Persons")
                     
-                    # --- UPDATED SECTION: MERGE PREVIEW ---
                     col1_merge, col2_merge = st.columns([2, 1])
                     
                     with col1_merge:
@@ -226,7 +223,6 @@ if db_manager:
                             elif not source_ids:
                                 st.warning("Please select at least one source person.")
                             else:
-
                                 if merge_persons(target_id, source_ids, st.session_state.output_directory):
                                     st.success("Successfully merged persons and their folders.")
                                     refresh_data()
@@ -248,13 +244,12 @@ if db_manager:
                                 display_image_preview(source_id_to_preview, all_persons_data)
                         else:
                             st.info("No sources selected to preview.")
-                    # --- END OF UPDATED SECTION ---
+
 
                 else:
                     st.info("No persons available to manage.")
             except Exception as e:
                 st.error(f"Failed to load person management tools: {e}")
-
 
 else:
     st.error("Database connection failed. Please check your MongoDB instance and configuration.")

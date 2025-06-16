@@ -4,7 +4,7 @@ DEFAULT_CONFIG = {
         "database_name": "imageProject"
     },
     "face_recognition": {
-        "similarity_threshold": 0.8,
+        "similarity_threshold": 0.95,
         "confidence_threshold": 0.25
     }
 }

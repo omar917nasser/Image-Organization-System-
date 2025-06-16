@@ -21,12 +21,10 @@ def ensure_dir_exists(directory):
 def copy_file_to_destination(source_path: str, dest_dir: str, filename: str) -> bool:
     """Copy a file to a destination directory with proper path handling."""
     try:
-        ensure_dir_exists(dest_dir)  # This correctly creates the person's folder
+        ensure_dir_exists(dest_dir)  
         dest_path = os.path.join(dest_dir, filename)
-        
-        # The incorrect os.makedirs call has been removed.
-        
-        if source_path != dest_path:  # Only copy if source and destination are different
+
+        if source_path != dest_path:  
             shutil.copy2(source_path, dest_path)
             print(f"Copied {filename} to {dest_dir}")
             return True

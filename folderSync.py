@@ -2,10 +2,8 @@ import os
 import shutil
 
 from databaseManager import MongoDBManager
-from config import CONNECTION_URI, DATABASE_NAME # Import CONNECTION_URI and DATABASE_NAME
+from config import CONNECTION_URI, DATABASE_NAME 
 
-# Initialize DB manager here, as folderSync needs to query person names
-# Ensure MongoDBManager is initialized with connection details if it requires them
 db_manager = MongoDBManager(connection_uri=CONNECTION_URI, database_name=DATABASE_NAME)
 
 def rename_folder_on_disk(old_name_label: str, new_name_label: str, output_dir: str) -> bool:
@@ -65,7 +63,6 @@ def merge_person_folders(target_person_id: str, source_person_ids: list, output_
                     continue
 
                 for filename in os.listdir(folderPath):
-                    # build full path to the file
                     filepath = os.path.join(folderPath, filename)
                     
                     if os.path.isfile(filepath):

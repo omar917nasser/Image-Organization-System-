@@ -1,3 +1,4 @@
+# Core face processing module for face detection, recognition, and person management
 import cv2
 import torch
 import numpy as np
@@ -12,9 +13,8 @@ from folderSync import rename_folder_on_disk, merge_person_folders
 # Initialize database connection
 db_manager = MongoDBManager(connection_uri=CONNECTION_URI, database_name=DATABASE_NAME)
 
-# Define image standardization transform
 def standardize_image(img):
-    """Standardize image for FaceNet input."""
+    """Standardize image for FaceNet input by converting to RGB and applying transforms."""
     # Convert to RGB if needed
     if isinstance(img, np.ndarray):
         if len(img.shape) == 2:  # Grayscale
@@ -26,7 +26,7 @@ def standardize_image(img):
     if isinstance(img, np.ndarray):
         img = Image.fromarray(img)
     
-    # Define transforms
+    # Define transforms for FaceNet input
     transform = transforms.Compose([
         transforms.Resize((160, 160)),  # FaceNet expects 160x160
         transforms.ToTensor(),
@@ -37,9 +37,8 @@ def standardize_image(img):
     img_tensor = transform(img)
     return img_tensor
 
-
 def detect_faces_yolo(image_path):
-    """Detect faces in an image using YOLO."""
+    """Detect faces in an image using YOLO with padding for better face capture."""
     try:
         # Read image with PIL first to ensure RGB format
         img_pil = Image.open(image_path).convert('RGB')
@@ -48,6 +47,7 @@ def detect_faces_yolo(image_path):
         # Get image dimensions
         height, width = img.shape[:2]
         
+        # Run YOLO detection with confidence threshold
         results = YOLO_MODEL(img, device=DEVICE, conf=CONFIDENCE_THRESHOLD, save=False)
 
         bboxes = []
@@ -56,7 +56,7 @@ def detect_faces_yolo(image_path):
             for box in boxes:
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
                 
-                # Add padding (20% of box size)
+                # Add padding (20% of box size) for better face capture
                 box_width = x2 - x1
                 box_height = y2 - y1
                 padding_x = int(box_width * 0.2)
@@ -75,7 +75,7 @@ def detect_faces_yolo(image_path):
         return []
     
 def get_face_embedding(face_image):
-    """Get face embedding using FaceNet."""
+    """Generate face embedding using FaceNet model."""
     try:
         # Standardize the image
         face_tensor = standardize_image(face_image)
@@ -87,12 +87,9 @@ def get_face_embedding(face_image):
     except Exception as e:
         print(f"Error getting face embedding: {e}")
         return None
-    
-
-
 
 def identify_person(embedding1, similarity_threshold=SIMILARITY_THRESHOLD, image_path=None):
-    """Identify a person based on their face embedding."""
+    """Identify a person based on face embedding similarity or create new person if no match."""
     try:
         # Get all persons from database
         persons = db_manager.get_all_persons()
@@ -100,6 +97,7 @@ def identify_person(embedding1, similarity_threshold=SIMILARITY_THRESHOLD, image
         best_match = None
         best_similarity = -1
         
+        # Find best matching person based on cosine similarity
         for person_id, person_data in persons.items():
             embedding2 = person_data["representative_embedding"]
             similarity = torch.nn.functional.cosine_similarity(
@@ -111,14 +109,14 @@ def identify_person(embedding1, similarity_threshold=SIMILARITY_THRESHOLD, image
                 best_similarity = similarity
                 best_match = person_id
 
+        # Return existing person if similarity exceeds threshold
         if best_similarity >= similarity_threshold:
             if image_path:
                 db_manager.add_embedding_to_person(best_match, embedding1, image_path)
             return best_match
         else:
-            # This block is the critical change
+            # Create new person if no match found
             if image_path:
-                # Calls the new function signature, correctly setting name_label to None
                 id = db_manager.save_new_person(embedding1, name_label=None, image_path=image_path)
             else:
                 id = db_manager.save_new_person(embedding1, name_label=None)
@@ -127,10 +125,9 @@ def identify_person(embedding1, similarity_threshold=SIMILARITY_THRESHOLD, image
     except Exception as e:
         print(f"Error identifying person: {e}")
         return None
-    
 
 def get_person_name(person_id):
-    """Get the name label for a person."""
+    """Retrieve name label for a person from database."""
     try:
         person = db_manager.getPerson(person_id)
         return person["name_label"]
@@ -139,31 +136,28 @@ def get_person_name(person_id):
         print(f"Error getting person name: {e}")
         return None
 
-def update_person_name(person_id, new_name, output_dir): # Added output_dir parameter
-    """Update the name label for a person and rename their folder."""
+def update_person_name(person_id, new_name, output_dir):
+    """Update person's name in database and rename their folder."""
     try:
-        # Get the current person data BEFORE updating the name
+        # Get current person data before update
         current_person_data = db_manager.getPerson(person_id)
         old_name_label = current_person_data.get("name_label")
         
         current_folder_name = old_name_label if old_name_label else person_id
 
-        # Perform the database update first
+        # Update database first
         db_update_success = db_manager.update_person_name(person_id, new_name)
 
         if db_update_success:
-            # Determine the new folder name. It will be the `new_name` provided.
+            # Rename folder on disk
             new_folder_name = new_name
-            
-            # Now, attempt to rename the folder on disk
-            folder_rename_success = rename_folder_on_disk(current_folder_name, new_folder_name,  output_dir)
+            folder_rename_success = rename_folder_on_disk(current_folder_name, new_folder_name, output_dir)
             
             if folder_rename_success:
                 print(f"Successfully updated name for person {person_id} and renamed folder.")
                 return True
             else:
                 print(f"Successfully updated name for person {person_id} in DB, but failed to rename folder.")
-                # You might want to revert the DB change here if folder rename is critical
                 return False
         else:
             print(f"Failed to update name for person {person_id} in database.")
@@ -172,26 +166,28 @@ def update_person_name(person_id, new_name, output_dir): # Added output_dir para
         print(f"Error updating person name and folder: {e}")
         return False
 
-def merge_persons(target_id, source_ids, output_dir): # Added output_dir parameter
-    """Merge multiple persons into one and merge their folders."""
+def merge_persons(target_id, source_ids, output_dir):
+    """Merge multiple persons into one target person and combine their folders."""
     try:
-        # Get the names of the target and source persons *before* the merge
+        # Verify target person exists
         target_person_data = db_manager.getPerson(target_id)
         if not target_person_data:
             print(f"Target person with ID '{target_id}' not found in DB.")
             return False
 
+        # Verify all source persons exist
         for source in source_ids:
             source_person_data = db_manager.getPerson(source)
             if not source_person_data:
                 print(f"Source person with ID '{source}' not found in DB. Skipping.")
                 continue
-        # Perform the database merge
+
+        # Merge folders on disk first
         db_merge_success = merge_person_folders(target_id, source_ids, output_dir) 
         print("Successfully merged persons in folders")
 
         if db_merge_success:
-            # Now, merge the folders on disk
+            # Then merge in database
             folder_merge_success = db_manager.merge_persons(target_id, source_ids)
             
             if folder_merge_success:
@@ -199,7 +195,6 @@ def merge_persons(target_id, source_ids, output_dir): # Added output_dir paramet
                 return True
             else:
                 print(f"Successfully merged persons in folders, but failed to merge DB.")
-                # Consider rolling back DB changes if folder merge is critical
                 return False
         else:
             print(f"Failed to merge persons in database.")
@@ -209,7 +204,7 @@ def merge_persons(target_id, source_ids, output_dir): # Added output_dir paramet
         return False
 
 def close_database():
-    """Close the database connection."""
+    """Close database connection."""
     try:
         db_manager.close()
     except Exception as e:
