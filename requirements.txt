@@ -1,0 +1,9 @@
+ultralytics
+facenet-pytorch
+torch
+torchvision
+pymongo
+numpy
+opencv-python
+Pillow
+streamlit
